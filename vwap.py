@@ -5,8 +5,15 @@ import numpy as np
 
 v = []
 p = []
+dic = {}
+products = ['BTC-USD', 'ETH-USD']
 
-def vwap():
+for i in products:
+    dic[i] = [[],[]]
+
+def vwap(pid):
+    v = dic[pid][0]
+    p = dic[pid][1]
     tmp1 = np.zeros_like(v)
     tmp2 = np.zeros_like(v)
 
@@ -18,25 +25,25 @@ def vwap():
 
 class myWebsocketClient(cbpro.WebsocketClient):
     def on_open(self):
-        self.url = "wss://ws-feed.pro.coinbase.com/"
-        self.products = ["BTC-USD"]
-        self.channels = ["matches"]
-        print("Lets count the messages!")
+        self.url = 'wss://ws-feed.pro.coinbase.com/'
+        self.products = products
+        self.channels = ['matches']
 
     def on_message(self, msg):
-    	print(msg)
-    	if msg and msg['type'] == 'match':
-    		v.append(float(msg["size"]))
-    		p.append(float(msg["price"]))
+        if msg and msg['type'] == 'match':
+            pid = msg['product_id']
+            dic[pid][0].append(float(msg['size']))
+            dic[pid][1].append(float(msg['price']))
 
-    		print(vwap())
-    		
+            if len(dic[pid][0]) > 200:
+                print('pop!')
+                dic[pid][0].pop(0)
+                dic[pid][1].pop(0)
+
+            print(pid + ' VWAP:' ,vwap(pid), len(dic[pid][0]))
+
     def on_close(self):
         print("-- Goodbye! --")
 
 wsClient = myWebsocketClient()
 wsClient.start()
-print(wsClient.url, wsClient.products)
-while (1):
-    time.sleep(1)
-wsClient.close()
