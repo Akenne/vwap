@@ -1,27 +1,27 @@
 import cbpro
-from numba import jit
-import time
 import numpy as np
 
-v = []
-p = []
 dic = {}
-products = ['BTC-USD', 'ETH-USD']
+products = ['BTC-USD', 'ETH-USD', 'ETH-BTC']
 
+#create array of volume/price/vwap for each pair
 for i in products:
-    dic[i] = [[],[]]
+    dic[i] = [[],[], [0,0]]
 
 def vwap(pid):
     v = dic[pid][0]
     p = dic[pid][1]
-    tmp1 = np.zeros_like(v)
-    tmp2 = np.zeros_like(v)
 
-    for i in range(0,len(v)):
-        tmp1[i] = tmp1[i-1] + v[i] * p[i]
-        tmp2[i] = tmp2[i-1] + v[i]
+    #last vwap calculation
+    last = dic[pid][2]
 
-    return tmp1[-1] / tmp2[-1]
+    #add new datapoint to vwap
+    last[0] += v[-1] * p[-1]
+    last[1] += v[-1]
+
+    dic[pid][2] = last   
+
+    return last[0] / last[1]
 
 class myWebsocketClient(cbpro.WebsocketClient):
     def on_open(self):
@@ -32,15 +32,28 @@ class myWebsocketClient(cbpro.WebsocketClient):
     def on_message(self, msg):
         if msg and msg['type'] == 'match':
             pid = msg['product_id']
-            dic[pid][0].append(float(msg['size']))
-            dic[pid][1].append(float(msg['price']))
+            coin = dic[pid]
 
-            if len(dic[pid][0]) > 200:
-                print('pop!')
-                dic[pid][0].pop(0)
-                dic[pid][1].pop(0)
+            # add new datapoint
+            coin[0].append(float(msg['size']))
+            coin[1].append(float(msg['price']))
 
-            print(pid + ' VWAP:' ,vwap(pid), len(dic[pid][0]))
+            # remove oldest datapoint if more than 200
+            if len(coin[0]) > 200:
+                # get oldest datapoint
+                v = coin[0][0]
+                p = coin[1][0]
+
+                # subtract vw and volume from running vwap calculation
+                coin[2][0] -= v*p
+                coin[2][1] -= v
+
+                # remove oldest datapoint
+                coin[0].pop(0)
+                coin[1].pop(0)
+
+            dic[pid] = coin
+            print(pid + ' VWAP:', vwap(pid))
 
     def on_close(self):
         print("-- Goodbye! --")
